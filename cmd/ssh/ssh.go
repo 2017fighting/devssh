@@ -34,8 +34,8 @@ type SSHCmd struct {
 	NameSpace string
 	Service   string
 
-	// Command string
-	User string
+	Command string
+	User    string
 	// WorkDir string
 }
 
@@ -52,7 +52,7 @@ func NewSSHCmd() *cobra.Command {
 	}
 	sshCmd.Flags().StringVar(&cmd.NameSpace, "ns", "", "The k8s namespace of the container")
 	sshCmd.Flags().StringVar(&cmd.Service, "svc", "", "The k8s service of the container")
-	// sshCmd.Flags().StringVar(&cmd.Command, "command", "", "The command to execute within the workspace")
+	sshCmd.Flags().StringVar(&cmd.Command, "command", "", "The command to execute within the workspace")
 	sshCmd.Flags().StringVar(&cmd.User, "user", "root", "The user of the pod to use")
 	// sshCmd.Flags().StringVar(&cmd.WorkDir, "workdir", "", "The working directory in the container")
 	return sshCmd
@@ -223,7 +223,11 @@ func (cmd *SSHCmd) startService(ctx context.Context, sshClient *ssh.Client, stde
 	session.Stdin = stdin
 	session.Stdout = stdout
 	session.Stderr = stderr
-	err = session.Shell()
+	if cmd.Command == "" {
+		err = session.Shell()
+	} else {
+		err = session.Start(cmd.Command)
+	}
 	if err != nil {
 		return err
 	}
