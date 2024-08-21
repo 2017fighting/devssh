@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/2017fighting/devssh/cmd/agent"
 	ssh2 "github.com/2017fighting/devssh/cmd/ssh"
 	sshserver "github.com/2017fighting/devssh/cmd/ssh-server"
 	log2 "github.com/loft-sh/log"
@@ -20,7 +21,7 @@ func buildRoot() *cobra.Command {
 	}
 	cmd.AddCommand(ssh2.NewSSHCmd())
 	cmd.AddCommand(sshserver.NewSSHServerCmd())
-	// TODO: helper ssh-server
+	cmd.AddCommand(agent.NewAgentCmd())
 	return cmd
 }
 

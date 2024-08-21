@@ -23,14 +23,14 @@ type WorkspaceClient struct {
 
 	Service   string
 	Namespace string
-	log       log.Logger
+	Log       log.Logger
 }
 
 func NewWorkspaceClient(namespace string, service string, log log.Logger) *WorkspaceClient {
 	return &WorkspaceClient{
 		Namespace: namespace,
 		Service:   service,
-		log:       log,
+		Log:       log,
 	}
 }
 
@@ -93,12 +93,12 @@ func (s *WorkspaceClient) initLock() {
 }
 func (s *WorkspaceClient) Lock(ctx context.Context) error {
 	s.initLock()
-	s.log.Debugf("Acquire lock...")
-	err := tryLock(ctx, s.lock, "workspace", s.log)
+	s.Log.Debugf("Acquire lock...")
+	err := tryLock(ctx, s.lock, "workspace", s.Log)
 	if err != nil {
 		return fmt.Errorf("error locking workspace: %w", err)
 	}
-	s.log.Debugf("Acquired workspace lock...")
+	s.Log.Debugf("Acquired workspace lock...")
 	return nil
 }
 
@@ -107,7 +107,7 @@ func (s *WorkspaceClient) Unlock() {
 
 	err := s.lock.Unlock()
 	if err != nil {
-		s.log.Warnf("Error unlocking workspace: %v", err)
+		s.Log.Warnf("Error unlocking workspace: %v", err)
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/2017fighting/devssh/pkg/agent"
@@ -63,7 +62,7 @@ func getPodByService(namespace string, service string) string {
 	return ""
 }
 
-func Exec(ctx context.Context, namespace string, service string) {
+func Exec(ctx context.Context, namespace string, service string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	config, clientset := getK8sClient()
 	podName := getPodByService(namespace, service)
 	log.Default.Infof("get podName:%v", podName)
@@ -75,25 +74,29 @@ func Exec(ctx context.Context, namespace string, service string) {
 			Stdin:  true,
 			Stdout: true,
 			Stderr: true,
-			TTY:    true,
+			TTY:    false,
+			// TTY:    true,
 		}, scheme.ParameterCodec,
 	)
 
 	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
-		panic(fmt.Errorf("k8s remote exec: %s", err))
+		return fmt.Errorf("k8s remote exec: %s", err)
 	}
-	screen := struct {
-		io.Reader
-		io.Writer
-	}{os.Stdin, os.Stdout}
+	// screen := struct {
+	// 	io.Reader
+	// 	io.Writer
+	// }{os.Stdin, os.Stdout}
 
 	if err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdin:  screen,
-		Stdout: screen,
-		Stderr: screen,
+		Stdin:  stdin,
+		Stdout: stdout,
+		// Stdin:  screen,
+		// Stdout: screen,
+		Stderr: stderr,
 		Tty:    true,
 	}); err != nil {
-		panic(fmt.Errorf("k8s exec: %w", err))
+		return fmt.Errorf("k8s exec: %w", err)
 	}
+	return nil
 }
