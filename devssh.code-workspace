@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../devpod-loft-sh"
+		}
+	],
+	"settings": {}
+}

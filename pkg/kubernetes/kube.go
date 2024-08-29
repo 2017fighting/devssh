@@ -62,13 +62,13 @@ func getPodByService(namespace string, service string) string {
 	return ""
 }
 
-func Exec(ctx context.Context, namespace string, service string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+func Exec(ctx context.Context, namespace string, service string, workdir string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	config, clientset := getK8sClient()
 	podName := getPodByService(namespace, service)
 	log.Default.Infof("get podName:%v", podName)
 	req := clientset.CoreV1().RESTClient().Post().Resource("pods").Namespace(namespace).Name(podName).SubResource("exec").VersionedParams(
 		&corev1.PodExecOptions{
-			Command: []string{agent.ContainerDevPodHelperLocation, "ssh-server"},
+			Command: []string{agent.ContainerDevPodHelperLocation, "ssh-server", "--workdir", workdir},
 			// Command: []string{"ls", "/mnt"},
 			// Command: []string{"zsh"},
 			Stdin:  true,

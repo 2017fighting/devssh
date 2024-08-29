@@ -31,12 +31,13 @@ import (
 )
 
 type SSHCmd struct {
+	Stdio     bool
 	NameSpace string
 	Service   string
 
 	Command string
 	User    string
-	// WorkDir string
+	WorkDir string
 }
 
 // devssh ssh --
@@ -54,7 +55,8 @@ func NewSSHCmd() *cobra.Command {
 	sshCmd.Flags().StringVar(&cmd.Service, "svc", "", "The k8s service of the container")
 	sshCmd.Flags().StringVar(&cmd.Command, "command", "", "The command to execute within the workspace")
 	sshCmd.Flags().StringVar(&cmd.User, "user", "root", "The user of the pod to use")
-	// sshCmd.Flags().StringVar(&cmd.WorkDir, "workdir", "", "The working directory in the container")
+	sshCmd.Flags().BoolVar(&cmd.Stdio, "stdio", false, "If true will tunnel connection through stdout and stdin")
+	sshCmd.Flags().StringVar(&cmd.WorkDir, "workdir", "/workspaces", "The working directory in the container")
 	return sshCmd
 }
 
@@ -96,16 +98,15 @@ func ensureRunning(
 }
 
 func (cmd *SSHCmd) startExtraService(ctx context.Context, sshClient *ssh.Client) error {
-	log.Default.Info("init extra service")
 	stdoutReader, stdoutWriter, err := os.Pipe()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "create stdout pipe")
 	}
 	defer stdoutWriter.Close()
 
 	stdinReader, stdinWriter, err := os.Pipe()
 	if err != nil {
-		return err
+		return errors.Wrap(err, "create stdin pipe")
 	}
 	defer stdinWriter.Close()
 
@@ -144,24 +145,19 @@ func (cmd *SSHCmd) startExtraService(ctx context.Context, sshClient *ssh.Client)
 	defer writer.Close()
 
 	command := fmt.Sprintf("'%s' agent credentials-server --user '%s'", agent.ContainerDevPodHelperLocation, cmd.User)
-	log.Default.Infof(command)
 
 	err = devssh.Run(cancelCtx, sshClient, command, stdinReader, stdoutWriter, writer)
-	log.Default.Info("run agent credentials-server")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "run agent credentials-server")
 	}
 	err = <-errChan
 	if err != nil {
-		return err
+		return errors.Wrap(err, "extra svc")
 	}
 	return nil
 }
 
-func (cmd *SSHCmd) startService(ctx context.Context, sshClient *ssh.Client, stderr io.Writer) error {
-	// extra service
-	go cmd.startExtraService(ctx, sshClient)
-
+func (cmd *SSHCmd) newShell(ctx context.Context, sshClient *ssh.Client, stderr io.Writer) error {
 	session, err := sshClient.NewSession()
 	if err != nil {
 		return err
@@ -289,7 +285,7 @@ func (cmd *SSHCmd) jumpContainer(ctx context.Context, client *client.WorkspaceCl
 	go func() {
 		defer client.Log.Infof("tunnel to host closed")
 
-		tunnelChan <- kubernetes.Exec(cancelCtx, cmd.NameSpace, cmd.Service, stdinReader, stdoutWriter, stderr)
+		tunnelChan <- kubernetes.Exec(cancelCtx, cmd.NameSpace, cmd.Service, cmd.WorkDir, stdinReader, stdoutWriter, stderr)
 	}()
 
 	containerChan := make(chan error, 1)
@@ -306,12 +302,61 @@ func (cmd *SSHCmd) jumpContainer(ctx context.Context, client *client.WorkspaceCl
 		defer client.Log.Infof("Connection to container closed")
 		client.Log.Infof("Successfully connected to host")
 		unlockOnce.Do(client.Unlock)
-		containerChan <- errors.Wrap(cmd.startService(cancelCtx, sshClient, stderr), "run in container")
+		containerChan <- errors.Wrap(cmd.startTunnel(cancelCtx, sshClient, stderr, client.Log), "start tunnel")
+		// containerChan <- errors.Wrap(cmd.startService(cancelCtx, sshClient, stderr), "run in container")
 	}()
 	select {
 	case err := <-containerChan:
 		return errors.Wrap(err, "tunnel to container")
 	case err := <-tunnelChan:
 		return errors.Wrap(err, "connect to server")
+	}
+}
+
+func (cmd *SSHCmd) newSSHServer(ctx context.Context, sshClient *ssh.Client, stderr io.Writer, log log.Logger) error {
+	sess, err := sshClient.NewSession()
+	if err != nil {
+		return err
+	}
+	defer sess.Close()
+
+	exit := make(chan struct{})
+	defer close(exit)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = sess.Signal(ssh.SIGINT)
+			_ = sess.Close()
+		case <-exit:
+		}
+	}()
+
+	sess.Stdin = os.Stdin
+	sess.Stdout = os.Stdout
+	sess.Stderr = stderr
+	command := fmt.Sprintf("%s ssh-server --workdir %s", agent.ContainerDevPodHelperLocation, cmd.WorkDir)
+	command = fmt.Sprintf("su -c \"%s\" '%s'", command, cmd.User)
+	log.Infof(command)
+
+	// err = sess.Run(command)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+func (cmd *SSHCmd) startTunnel(ctx context.Context, sshClient *ssh.Client, stderr io.Writer, log log.Logger) error {
+	go func() {
+		err := cmd.startExtraService(ctx, sshClient)
+		if err != nil {
+			log.Errorf("start extra service:%w", err)
+		}
+	}()
+
+	if cmd.Stdio {
+		return cmd.newSSHServer(ctx, sshClient, stderr, log)
+	} else {
+		return cmd.newShell(ctx, sshClient, stderr)
 	}
 }

@@ -3,7 +3,6 @@ package sshserver
 import (
 	"context"
 	"os"
-	"path/filepath"
 
 	"github.com/loft-sh/log"
 	"github.com/loft-sh/ssh"
@@ -14,6 +13,7 @@ import (
 )
 
 type SSHServerCmd struct {
+	WorkDir string
 }
 
 func NewSSHServerCmd() *cobra.Command {
@@ -26,7 +26,7 @@ func NewSSHServerCmd() *cobra.Command {
 			return cmd.Run(ctx)
 		},
 	}
-
+	sshServerCmd.Flags().StringVar(&cmd.WorkDir, "workdir", "/workspaces", "The working directory in the container")
 	return sshServerCmd
 
 }
@@ -36,7 +36,7 @@ func (c *SSHServerCmd) Run(ctx context.Context) error {
 		keys    []ssh.PublicKey
 		hostKey []byte
 	)
-	server, err := helperssh.NewServer("0.0.0.0:8022", hostKey, keys, filepath.Join("/workspaces"), log.Default.ErrorStreamOnly())
+	server, err := helperssh.NewServer("0.0.0.0:8022", hostKey, keys, c.WorkDir, log.Default.ErrorStreamOnly())
 	if err != nil {
 		return err
 	}

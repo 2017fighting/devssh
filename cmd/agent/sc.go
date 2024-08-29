@@ -8,8 +8,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/2017fighting/devssh/pkg/agent/tunnelserver"
+	// "github.com/2017fighting/devssh/pkg/agent/tunnelserver"
 	"github.com/loft-sh/devpod/pkg/agent/tunnel"
+	"github.com/loft-sh/devpod/pkg/agent/tunnelserver"
 	"github.com/loft-sh/devpod/pkg/credentials"
 	"github.com/loft-sh/devpod/pkg/gitcredentials"
 	portpkg "github.com/loft-sh/devpod/pkg/port"
